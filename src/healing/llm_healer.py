@@ -2,7 +2,7 @@ import os
 import json
 import re
 from src.utils.logger import logger
-from src.healing.prompts import ANALYZE_ERROR_PROMPT, GENERATE_PATCH_PROMPT
+from src.healing.prompts import SMART_HEAL_PROMPT
 
 try:
     import openai
@@ -44,46 +44,63 @@ class LLMHealer:
                 logger.warning(f"Failed to load llm_config.json: {e}")
         return {}
 
-    def heal(self, logs: str) -> bool:
+    def heal(self, logs: str, attempt: int = 1) -> bool:
         """
-        Attempts to fix the build error using LLM.
-        Returns True if a fix was applied, False otherwise.
+        Attempts to heal the project using LLM.
         """
-        # Validator: Check for API key (skip for ollama)
-        if not self.is_ollama and (not self.api_key or self.api_key == "YOUR_OPENAI_API_KEY_HERE"):
-            logger.warning("Skipping LLM healing: API key invalid.")
+        if not (self.api_key or self.is_ollama):
+            logger.warning("No LLM API Key provided. Skipping LLM healing.")
+            return False
+
+        if not logs:
+            logger.warning("No build logs provided for healing.")
             return False
             
-        # Validator: Check for module dependency if not Gemini/Ollama
-        if not self.is_gemini and not self.is_ollama and not openai:
-            logger.warning("Skipping LLM healing: openai module missing for OpenAI model.")
+        logger.info(f"Engaging LLMHealer (Provider: {self.provider}, Model: {self.model}, Attempt: {attempt})...")
+        
+        # Limit logs to avoid token limits (keep last 20k chars)
+        log_chunk = logs[-20000:]
+        
+        # Generate file tree for context
+        file_tree = self._generate_file_tree()
+        
+        # Prepare Prompt
+        prompt = SMART_HEAL_PROMPT.format(
+            build_log=log_chunk,
+            file_tree=file_tree
+        )
+        
+        # Query LLM
+        logger.info("Querying LLM for Smart Fix...")
+        response = self._query_llm(prompt)
+        
+        if not response:
+            logger.error("LLM returned no response.")
             return False
             
-        logger.info(f"Engaging LLMHealer (Provider: {self.provider}, Model: {self.model})...")
-        try:
-            # Step 1: Analyze Error
-            analysis = self._analyze_error(logs)
-            if not analysis:
-                logger.warning("LLM failed to analyze error.")
-                return False
-                
-            logger.info(f"LLM Analysis: {json.dumps(analysis, indent=2)}")
-            
-            # Step 2: Generate Fix
-            fix_code = self._generate_fix(analysis)
-            if not fix_code:
-                logger.warning("LLM failed to generate fix.")
-                return False
-                
-            logger.info("LLM generated fix code. Applying...")
-            
-            # Step 3: Apply Fix
-            success = self._apply_fix(fix_code)
-            return success
-            
-        except Exception as e:
-            logger.error(f"LLMHealer process failed: {e}")
+        # Extract Code
+        fix_code = self._extract_code(response)
+        
+        if not fix_code:
+            logger.error("Could not extract Python code from LLM response.")
             return False
+            
+        # Execute Fix
+        return self._apply_fix(fix_code)
+
+    def _extract_code(self, text: str) -> str:
+        """
+        Extracts python code block from text.
+        """
+        match = re.search(r"```python(.*?)```", text, re.DOTALL)
+        if match:
+            return match.group(1).strip()
+        
+        # Fallback: check if the whole text looks like python import
+        if "import os" in text or "import re" in text:
+            return text.replace("```", "").strip()
+            
+        return None
 
     def _query_llm(self, prompt: str) -> str:
         """
@@ -231,6 +248,23 @@ class LLMHealer:
             
         return "\n".join(snippet)
 
+    def _parse_json(self, content: str) -> dict:
+        """
+        Parses JSON from string, handling markdown code blocks.
+        """
+        if not content:
+            return None
+
+        try:
+            # Try to find JSON block first
+            json_match = re.search(r"\{.*\}", content, re.DOTALL)
+            if json_match:
+                content = json_match.group(0)
+            return json.loads(content)
+        except Exception as e:
+            logger.error(f"Error parsing analysis JSON: {e}")
+            return None
+
     def _analyze_error(self, logs: str) -> dict:
         """
         Queries LLM to analyze the build log.
@@ -256,6 +290,28 @@ class LLMHealer:
         except Exception as e:
             logger.error(f"Error parsing analysis JSON: {e}")
             return None
+
+    def _generate_file_tree(self, max_depth=3):
+        """
+        Generates a simplified file tree string to help LLM locate files.
+        """
+        tree_str = "Project Structure:\n"
+        base_level = self.project_root.count(os.sep)
+        
+        for root, dirs, files in os.walk(self.project_root):
+            level = root.count(os.sep) - base_level
+            if level > max_depth:
+                continue
+            
+            indent = "  " * level
+            tree_str += f"{indent}{os.path.basename(root)}/\n"
+            
+            subindent = "  " * (level + 1)
+            for f in files:
+                if f.endswith(('.java', '.xml', '.gradle', '.kts')):
+                    tree_str += f"{subindent}{f}\n"
+                    
+        return tree_str
 
     def _generate_fix(self, analysis: dict) -> str:
         """
@@ -288,7 +344,7 @@ class LLMHealer:
             current_cwd = os.getcwd()
             os.chdir(self.project_root)
             
-            logger.info("Executing patch script...")
+            logger.info(f"Executing patch script:\n{code}")
             # Use exec safely? We are an agent, we assume trust for now or sandbox.
             # For this MVP, exec is fine.
             exec(code, {'os': os, 're': re, 'print': print})

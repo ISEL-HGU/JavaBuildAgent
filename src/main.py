@@ -96,14 +96,14 @@ def main():
     logger.info(f"Build Root: {build_dir} (Relative: {build_relative_path})")
     
     builder = DockerManager(project_root, env_config, build_relative_path)
-    llm_healer = LLMHealer(project_root)
+    llm_healer = LLMHealer(build_dir)
     
     # Create output directory if it doesn't exist
     output_dir = os.path.abspath(args.output)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
         
-    MAX_RETRIES = 10
+    MAX_RETRIES = 15
     retry_count = 0
     build_success = False
     
@@ -120,7 +120,7 @@ def main():
             logger.warning("Build Cycle Failed.")
             if retry_count < MAX_RETRIES:
                 logger.info("Attempting LLM Healing...")
-                healed = llm_healer.heal(logs)
+                healed = llm_healer.heal(logs, attempt=retry_count + 1)
                 if healed:
                     logger.info("Healing applied. Retrying build...")
                     retry_count += 1
