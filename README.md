@@ -1,6 +1,13 @@
-# AutoBuild4Byte 구현 결과 보고서
+# AutoBuild4Byte
 
-우리는 CI 로그 없이 레거시 자바 프로젝트로부터 바이트코드를 복원하는 자동 빌드 에이전트 **AutoBuild4Byte**를 성공적으로 구현했습니다.
+CI 로그 없이 레거시 자바 프로젝트로부터 바이트코드를 복원하는 자동 빌드 에이전트
+
+### New Update (2026-01-19)
+- **Smart Flexible Healing**: 단일 통합 프롬프트(Smart Prompt)를 적용하여 LLM이 상황에 따라 코드 수정, 의존성 변경, 파일 생성 등을 자율적으로 선택하도록 개선.
+- **Context Awareness**: 파일 트리(Project Structure) 정보를 제공하여 Docker 내부 경로와 로컬 경로 간의 매핑 오류 해결.
+- **Knowledge Injection**: "Bintray/JCenter Shutdown", "Restlet Repo Missing", "Java Version Mismatch" 등 도메인 지식을 프롬프트에 주입하여 치유 성공률 대폭 향상.
+- **Improved Version Handling**: `class file version 55.0` (Java 11) 등의 호환성 오류 발생 시, 상속된(Inherited) 플러그인을 찾아내어 다운그레이드하는 전략 추가.
+
 
 ## 1. 시스템 구성 요소
 
