@@ -67,7 +67,11 @@ Knowledge Base (Common Issues):
 1. **Bintray/JCenter Shutdown**: These repositories are dead (SSL errors, 403 Forbidden). You MUST remove them or replace them with Maven Central (`https://repo.maven.apache.org/maven2`).
 2. **Restlet Repository**: If `org.restlet` artifacts are missing, they are NOT in Central. You must add this repository:
    `<repository><id>restlet</id><url>https://maven.restlet.talend.com</url></repository>` (or search for a working mirror).
-3. **Missing Artifacts**: If an artifact is missing from a repo, try upgrading the version to one available in Maven Central.
+3. **Java Version Mismatch**:
+   - Error: `class file version 55.0` (Java 11), `61.0` (Java 17) but running on Java 8 (`52.0`).
+   - Fix: The plugin/dependency is too new. **Downgrade** it to an older version compatible with Java 8.
+   - **Crucial**: If the plugin is NOT in `pom.xml`, it is inherited. You MUST **ADD** it to `<plugins>` with the older version to override the parent.
+4. **Missing Artifacts**: If an artifact is missing from a repo, try upgrading the version to one available in Maven Central.
 
 Build Log:
 {build_log}
