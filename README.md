@@ -98,7 +98,6 @@ python3 src/main.py \
   --path /Downloads/source-code.zip \
   --workspace ./temp_work \
   --output ./build_results
-```
 
 실행이 완료되면 `--output` (기본값: `output/`) 디렉토리에서 다음을 확인할 수 있습니다:
 - `classes/`: 도커 컨테이너에서 추출된 컴파일된 `.class` 파일들 (패키지 구조 유지)
