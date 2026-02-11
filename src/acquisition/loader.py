@@ -58,10 +58,12 @@ class ProjectLoader:
         for item in os.listdir(local_path):
             s = os.path.join(local_path, item)
             d = os.path.join(self.workspace_path, item)
+            logger.info(f"Copying {item}...")
             if os.path.isdir(s):
                 shutil.copytree(s, d)
             else:
                 shutil.copy2(s, d)
+            logger.info(f"Copied {item}")
 
     def _extract_archive(self, archive_path: str):
         if not os.path.exists(archive_path):

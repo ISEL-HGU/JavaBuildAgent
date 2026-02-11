@@ -2,6 +2,9 @@
 
 CI 로그 없이 레거시 자바 프로젝트로부터 바이트코드를 복원하는 자동 빌드 에이전트
 
+### New Update (2026-02-11)
+- **Bare Metal Mode**: Docker 없이 로컬 환경에서 직접 빌드할 수 있는 `--execution-mode local` 옵션 추가. `/data2/donggyu/benchmark/sec_code/tmp` 경로에 위치한 격리된 도구(JDK, Maven, Gradle)를 사용하여 안전하고 독립적인 빌드 환경 제공.
+
 ### New Update (2026-01-19)
 - **Smart Flexible Healing**: 단일 통합 프롬프트(Smart Prompt)를 적용하여 LLM이 상황에 따라 코드 수정, 의존성 변경, 파일 생성 등을 자율적으로 선택하도록 개선.
 - **Context Awareness**: 파일 트리(Project Structure) 정보를 제공하여 Docker 내부 경로와 로컬 경로 간의 매핑 오류 해결.
@@ -37,10 +40,17 @@ CI 로그 없이 레거시 자바 프로젝트로부터 바이트코드를 복�
   - `init.gradle` 스크립트를 도커 컨테이너의 글로벌 경로(`/root/.gradle/init.d/`)에 주입합니다.
   - 빌드 실행 시 동적으로 파손된 리포지토리(예: `repo.spring.io`)를 감지하고, 이를 **Maven Central**로 리다이렉트하여 인증 오류(401)를 무력화합니다.
 
-### E. 샌드박스 실행 (`src/execution`)
-- **DockerManager**:
+### E. 실행 관리 (`src/execution`)
+- **DockerManager (기본)**:
   - 추론된 환경을 기반으로 `Dockerfile`을 동적으로 생성합니다.
-  - **Maven**: `mvn compile -DskipTests` 실행 후 `target/classes` 추출.
+  - 샌드박스 환경에서 안전하게 빌드를 수행합니다.
+- **LocalManager (Bare Metal Mode)**:
+  - `--execution-mode local` 옵션 사용 시 동작합니다.
+  - `/data2/donggyu/benchmark/sec_code/tmp` 디렉토리에 위치한 **격리된 도구(JDK 8/17, Maven, Gradle)**를 강제로 사용하여 호스트의 환경 변수나 설정에 영향을 받지 않고 빌드를 수행합니다.
+  - 도커 오버헤드 없이 빠른 빌드가 가능합니다.
+
+- **빌드 및 추출 공통 로직**:
+  - **Maven**: `mvn package -DskipTests` 실행 후 `target/classes` 추출.
   - **Gradle**: `gradle compileJava -x test` 실행 후 `build/classes` 추출.
   - 빌드 성공 시 결과물을 호스트의 `output/classes` 디렉토리로 안전하게 복사합니다.
 
@@ -52,6 +62,7 @@ CI 로그 없이 레거시 자바 프로젝트로부터 바이트코드를 복�
 | `--commit` | 선택 | (`remote` 타입 전용) 체크아웃할 특정 Git 커밋 해시 | `HEAD` |
 | `--workspace` | 선택 | 프로젝트가 로드되고 빌드가 수행될 임시 작업 디렉토리 | `workspace/` |
 | `--output` | 선택 | 빌드 결과물(클래스 파일, 로그)이 저장될 경로 | `output/` |
+| `--execution-mode` | 선택 | 실행 모드 선택 (`docker`, `local`) | `docker` |
 
 ### 실행 예시
 
@@ -70,8 +81,20 @@ python3 src/main.py \
 
 #### 3. Zip 아카이브 빌드 및 커스텀 출력 경로 지정
 ```bash
-python3 src/main.py \
   --type archive \
+  --path /Downloads/source-code.zip \
+  --workspace ./temp_work \
+  --output ./build_results
+```
+
+#### 4. Bare Metal Mode (Docker 없이 실행)
+```bash
+python3 src/main.py \
+  --type local \
+  --path /path/to/project \
+  --execution-mode local
+```
+> **주의**: Local Mode는 `/data2/donggyu/benchmark/sec_code/tmp` 경로에 JDK와 빌드 도구(Maven, Gradle)가 올바르게 배치되어 있어야 동작합니다.
   --path /Downloads/source-code.zip \
   --workspace ./temp_work \
   --output ./build_results
