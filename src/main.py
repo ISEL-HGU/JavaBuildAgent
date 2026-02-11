@@ -32,6 +32,7 @@ def main():
     parser.add_argument("--commit", help="Commit hash (for remote type)")
     parser.add_argument("--workspace", default="workspace", help="Workspace directory")
     parser.add_argument("--output", default="output", help="Output directory for artifacts")
+    parser.add_argument("--execution-mode", choices=["docker", "local"], default="docker", help="Execution mode: docker (default) or local (bare metal)")
     
     args = parser.parse_args()
     
@@ -47,9 +48,12 @@ def main():
 
     # Phase 0: Pre-flight Checks
     logger.info("=== Phase 0: Pre-flight Checks ===")
-    if not check_prerequisites():
-         logger.error("Pre-flight checks failed. Please ensure Docker is running.")
-         sys.exit(1)
+    if args.execution_mode == "docker":
+        if not check_prerequisites():
+             logger.error("Pre-flight checks failed. Please ensure Docker is running or use --execution-mode local.")
+             sys.exit(1)
+    else:
+        logger.info("Running in Local Mode. Skipping Docker check.")
 
     # Phase 1: Discovery
     logger.info("=== Phase 1: Discovery ===")
@@ -83,6 +87,7 @@ def main():
     # Phase 4: Execution & Dynamic Healing
     logger.info("=== Phase 4: Execution & Dynamic Healing ===")
     from src.execution.docker_manager import DockerManager
+    from src.execution.local_manager import LocalManager
     from src.healing.llm_healer import LLMHealer
     
     # Calculate relative path from workspace root to build file directory
@@ -95,7 +100,13 @@ def main():
         
     logger.info(f"Build Root: {build_dir} (Relative: {build_relative_path})")
     
-    builder = DockerManager(project_root, env_config, build_relative_path)
+    if args.execution_mode == "local":
+        logger.info("Initializing Local Manager (Bare Metal Mode)...")
+        builder = LocalManager(project_root, env_config, build_relative_path)
+    else:
+        logger.info("Initializing Docker Manager...")
+        builder = DockerManager(project_root, env_config, build_relative_path)
+
     llm_healer = LLMHealer(build_dir)
     
     # Create output directory if it doesn't exist
